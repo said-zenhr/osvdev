@@ -60,11 +60,8 @@ module StackWatch
     end
 
     def resolve_slack_webhook(raw)
-      webhook = @env["STACKWATCH_SLACK_WEBHOOK"] ||
-                raw.dig("notifications", "slack", "webhook_url")
-      raise ConfigError, "Slack webhook URL not configured. Set STACKWATCH_SLACK_WEBHOOK env var or notifications.slack.webhook_url in stack.yml" if webhook.nil? || webhook.strip.empty?
-
-      webhook
+      @env["STACKWATCH_SLACK_WEBHOOK"] ||
+        raw.dig("notifications", "slack", "webhook_url")
     end
 
     def resolve_state_path(raw)

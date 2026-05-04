@@ -9,7 +9,7 @@ module StackWatch
       @stdout = stdout
       @stderr = stderr
       @state  = State.load(config.state_path)
-      @slack  = Notifiers::Slack.new(config.slack_webhook_url)
+      @slack  = config.slack_webhook_url ? Notifiers::Slack.new(config.slack_webhook_url) : nil
     end
 
     def run
@@ -21,7 +21,7 @@ module StackWatch
         next if new_vulns.empty?
 
         new_vulns.each do |vuln|
-          @slack.notify(package: package, vuln: vuln)
+          @slack&.notify(package: package, vuln: vuln)
           @stdout.puts "  [#{package.tier.upcase}] #{vuln["id"]} — #{package.ecosystem}/#{package.name}"
         end
 
