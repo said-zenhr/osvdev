@@ -59,7 +59,7 @@ class TestRunner < Minitest::Test
 
     assert_equal 1, count
     assert_match "CVE-2024-99999", out
-    assert_requested(:post, WEBHOOK_URL, times: 1)
+    assert_requested(:post, WEBHOOK_URL, times: 2)
   end
 
   def test_skips_already_seen_vulns
@@ -73,7 +73,7 @@ class TestRunner < Minitest::Test
     count, = run_runner
 
     assert_equal 0, count
-    assert_not_requested(:post, WEBHOOK_URL)
+    assert_requested(:post, WEBHOOK_URL, times: 1)
   end
 
   def test_persists_state_on_success

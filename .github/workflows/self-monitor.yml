@@ -1,32 +1,38 @@
-name: Self-monitor
+name: Daily CVE Monitor
 
 on:
   schedule:
-    - cron: "0 8 * * *"
+    - cron: "0 5 * * *"  # 8 AM Jordan (UTC+3)
   workflow_dispatch:
 
 jobs:
-  monitor:
+  stackwatch:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
-      - name: Restore state
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.3"
+          bundler-cache: true
+
+      - name: Restore CVE state
         uses: actions/cache@v4
         with:
           path: state.json
-          key: self-monitor-${{ runner.os }}-${{ github.run_id }}
-          restore-keys: self-monitor-${{ runner.os }}-
+          key: stackwatch-state-${{ github.run_id }}
+          restore-keys: stackwatch-state-
 
-      - name: Run StackWatch on this repo's stack
-        uses: yourorg/stackwatch@v1
-        with:
-          config: examples/stack.yml
-          slack-webhook-url: ${{ secrets.STACKWATCH_SLACK_WEBHOOK }}
+      - name: Run StackWatch
+        run: bundle exec ruby -Ilib exe/stackwatch run --config stack.yml
+        env:
+          STACKWATCH_SLACK_WEBHOOK: ${{ secrets.STACKWATCH_SLACK_WEBHOOK }}
 
-      - name: Save state
+      - name: Save CVE state
         uses: actions/cache/save@v4
         if: always()
         with:
           path: state.json
-          key: self-monitor-${{ runner.os }}-${{ github.run_id }}
+          key: stackwatch-state-${{ github.run_id }}

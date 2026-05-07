@@ -11,6 +11,11 @@ module StackWatch
         post(build_payload(package: package, vuln: vuln))
       end
 
+      def post_summary(total_new)
+        emoji = total_new.zero? ? ":white_check_mark:" : ":rotating_light:"
+        post({ "text" => "#{emoji} StackWatch: #{total_new} new vulnerabilit#{total_new == 1 ? "y" : "ies"} found." })
+      end
+
       private
 
       def build_payload(package:, vuln:)

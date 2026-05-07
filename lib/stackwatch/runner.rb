@@ -30,6 +30,7 @@ module StackWatch
       end
 
       @state.persist
+      @slack&.post_summary(total_new)
       @stdout.puts "StackWatch: #{total_new} new vulnerabilit#{total_new == 1 ? "y" : "ies"} found."
       total_new
     rescue Sources::OSVError => e
