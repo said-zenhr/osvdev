@@ -108,9 +108,10 @@ class TestConfig < Minitest::Test
     assert_raises(StackWatch::ConfigError) { StackWatch::Config.load(path: path, env: {}) }
   end
 
-  def test_missing_slack_raises
+  def test_missing_slack_is_allowed
     path = write_yml("packages: []\n")
-    assert_raises(StackWatch::ConfigError) { StackWatch::Config.load(path: path, env: {}) }
+    cfg = StackWatch::Config.load(path: path, env: {})
+    assert_nil cfg.slack_webhook_url
   end
 
   def test_file_not_found_raises

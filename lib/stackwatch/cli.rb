@@ -38,8 +38,11 @@ module StackWatch
         state_path_override: options[:state_path]
       )
       Runner.call(config)
-    rescue ConfigError => e
-      $stderr.puts "Configuration error: #{e.message}"
+    rescue ConfigError, Sources::OSVError => e
+      $stderr.puts "ERROR: #{e.message}"
+      exit 1
+    rescue Notifiers::SlackError => e
+      $stderr.puts "ERROR (Slack): #{e.message}"
       exit 1
     end
 

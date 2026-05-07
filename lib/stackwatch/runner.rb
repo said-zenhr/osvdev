@@ -29,17 +29,10 @@ module StackWatch
         total_new += new_vulns.size
       end
 
-      @state.persist
       @slack&.post_summary(total_new)
+      @state.persist
       @stdout.puts "StackWatch: #{total_new} new vulnerabilit#{total_new == 1 ? "y" : "ies"} found."
       total_new
-    rescue Sources::OSVError => e
-      @stderr.puts "ERROR (OSV): #{e.message}"
-      exit 1
-    rescue Notifiers::SlackError => e
-      @stderr.puts "ERROR (Slack): #{e.message}"
-      # Do not persist — let next run retry the failed notification
-      exit 1
     end
   end
 end

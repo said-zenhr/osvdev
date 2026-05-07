@@ -90,17 +90,17 @@ class TestRunner < Minitest::Test
     stub_osv
     stub_request(:post, WEBHOOK_URL).to_return(status: 500, body: "error")
 
-    assert_raises(SystemExit) do
+    assert_raises(StackWatch::Notifiers::SlackError) do
       StackWatch::Runner.call(@config, stdout: StringIO.new, stderr: StringIO.new)
     end
 
     refute File.exist?(@state_path)
   end
 
-  def test_exits_on_osv_failure
+  def test_raises_on_osv_failure
     stub_request(:post, OSV_BATCH_URL).to_return(status: 503, body: "unavailable")
 
-    assert_raises(SystemExit) do
+    assert_raises(StackWatch::Sources::OSVError) do
       StackWatch::Runner.call(@config, stdout: StringIO.new, stderr: StringIO.new)
     end
   end
