@@ -2,6 +2,7 @@ require "json"
 require "net/http"
 require "psych"
 require "set"
+require "time"
 
 module StackWatch
   VERSION = "0.1.0"
