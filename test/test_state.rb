@@ -86,4 +86,31 @@ class TestState < Minitest::Test
     result = state.diff(@pkg, [@vuln_a])
     assert_equal [@vuln_a], result
   end
+
+  def test_mark_seen_caps_at_max
+    state = StackWatch::State.load(@path)
+    big_batch = (1..600).map { |i| stub_vuln(id: "CVE-#{i}") }
+    state.mark_seen(@pkg, big_batch)
+    state.persist
+
+    data = JSON.parse(File.read(@path))
+    assert_equal StackWatch::State::MAX_SEEN_PER_PACKAGE, data.dig("packages", "PyPI/django").size
+  end
+
+  def test_mark_seen_keeps_most_recent
+    state = StackWatch::State.load(@path)
+    big_batch = (1..600).map { |i| stub_vuln(id: "CVE-#{i}") }
+    state.mark_seen(@pkg, big_batch)
+
+    data_ids = state.instance_variable_get(:@data).dig("packages", "PyPI/django")
+    assert_includes data_ids, "CVE-600"
+    refute_includes data_ids, "CVE-1"
+  end
+
+  def test_persist_creates_lockfile
+    state = StackWatch::State.load(@path)
+    state.persist
+
+    assert File.exist?("#{@path}.lock")
+  end
 end

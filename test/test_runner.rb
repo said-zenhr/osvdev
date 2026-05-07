@@ -99,7 +99,7 @@ class TestRunner < Minitest::Test
     assert_includes data.dig("packages", "PyPI/django"), "CVE-2024-99999"
   end
 
-  def test_does_not_persist_on_notifier_failure
+  def test_persists_state_despite_notifier_failure
     source   = FakeSource.new({ @pkg => [@vuln] })
     notifier = FailingNotifier.new
 
@@ -108,7 +108,36 @@ class TestRunner < Minitest::Test
                               source: source, notifier: notifier)
     end
 
-    refute File.exist?(@state_path)
+    assert File.exist?(@state_path), "State must be persisted even when Slack fails"
+    data = JSON.parse(File.read(@state_path))
+    assert_includes data.dig("packages", "PyPI/django"), "CVE-2024-99999"
+  end
+
+  def test_partial_slack_failure_persists_all_seen
+    pkg2  = StackWatch::Package.new(name: "next", ecosystem: "npm", tier: "standard")
+    vuln2 = stub_vuln(id: "CVE-2024-88888", summary: "Another vuln")
+
+    call_count = 0
+    notifier = FakeNotifier.new
+    notifier.define_singleton_method(:notify) do |package:, vuln:|
+      call_count += 1
+      raise StackWatch::Notifiers::SlackError, "boom" if call_count == 1
+      @notifications << { package: package, vuln: vuln }
+    end
+
+    source = FakeSource.new({ @pkg => [@vuln], pkg2 => [vuln2] })
+    stderr = StringIO.new
+
+    assert_raises(StackWatch::Notifiers::SlackError) do
+      StackWatch::Runner.call(@config, stdout: StringIO.new, stderr: stderr,
+                              source: source, notifier: notifier)
+    end
+
+    assert File.exist?(@state_path)
+    data = JSON.parse(File.read(@state_path))
+    assert_includes data.dig("packages", "PyPI/django"), "CVE-2024-99999"
+    assert_includes data.dig("packages", "npm/next"), "CVE-2024-88888"
+    assert_match "WARN", stderr.string
   end
 
   def test_raises_on_source_failure

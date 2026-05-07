@@ -60,8 +60,18 @@ module StackWatch
     end
 
     def resolve_slack_webhook(raw)
-      @env["STACKWATCH_SLACK_WEBHOOK"] ||
-        raw.dig("notifications", "slack", "webhook_url")
+      url = @env["STACKWATCH_SLACK_WEBHOOK"] ||
+            raw.dig("notifications", "slack", "webhook_url")
+      return nil if url.nil? || url.strip.empty?
+
+      if url.include?("${")
+        raise ConfigError, "Slack webhook URL contains unresolved variable: #{url}. Set STACKWATCH_SLACK_WEBHOOK env var."
+      end
+
+      URI(url)
+      url
+    rescue URI::InvalidURIError
+      raise ConfigError, "Invalid Slack webhook URL: #{url}"
     end
 
     def resolve_state_path(raw)

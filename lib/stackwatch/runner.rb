@@ -16,23 +16,30 @@ module StackWatch
     def run
       results   = @source.fetch_all
       total_new = 0
+      errors    = []
 
       results.each do |package, vulns|
         new_vulns = @state.diff(package, vulns)
         next if new_vulns.empty?
 
         new_vulns.each do |vuln|
-          @notifier&.notify(package: package, vuln: vuln)
-          @stdout.puts "  [#{package.tier.upcase}] #{vuln["id"]} — #{package.ecosystem}/#{package.name}"
+          begin
+            @notifier&.notify(package: package, vuln: vuln)
+          rescue Notifiers::SlackError => e
+            errors << e
+            @stderr.puts "WARN: Slack failed for #{vuln.id}: #{e.message}"
+          end
+          @stdout.puts "  [#{package.tier.upcase}] #{vuln.id} — #{package.ecosystem}/#{package.name}"
         end
 
         @state.mark_seen(package, new_vulns)
         total_new += new_vulns.size
       end
 
-      @notifier&.post_summary(total_new)
       @state.persist
+      @notifier&.post_summary(total_new) rescue nil
       @stdout.puts "StackWatch: #{total_new} new vulnerabilit#{total_new == 1 ? "y" : "ies"} found."
+      raise errors.first if errors.any?
       total_new
     end
   end

@@ -114,6 +114,28 @@ class TestConfig < Minitest::Test
     assert_nil cfg.slack_webhook_url
   end
 
+  def test_unresolved_variable_in_webhook_raises
+    path = write_yml(<<~YAML)
+      notifications:
+        slack:
+          webhook_url: "${STACKWATCH_SLACK_WEBHOOK}"
+      packages: []
+    YAML
+    err = assert_raises(StackWatch::ConfigError) { StackWatch::Config.load(path: path, env: {}) }
+    assert_match "unresolved variable", err.message
+  end
+
+  def test_invalid_webhook_url_raises
+    path = write_yml(<<~YAML)
+      notifications:
+        slack:
+          webhook_url: "not a valid url %%"
+      packages: []
+    YAML
+    err = assert_raises(StackWatch::ConfigError) { StackWatch::Config.load(path: path, env: {}) }
+    assert_match "Invalid Slack webhook URL", err.message
+  end
+
   def test_file_not_found_raises
     assert_raises(StackWatch::ConfigError) do
       StackWatch::Config.load(path: "/nonexistent/stack.yml", env: {})

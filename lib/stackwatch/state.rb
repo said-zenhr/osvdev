@@ -1,6 +1,7 @@
 module StackWatch
   class State
-    CURRENT_VERSION = 1
+    CURRENT_VERSION      = 1
+    MAX_SEEN_PER_PACKAGE = 500
 
     def self.load(path)
       new(path: path).tap(&:read)
@@ -30,14 +31,18 @@ module StackWatch
       key = package_key(package)
       @data["packages"][key] ||= []
       new_ids = vulns.map(&:id)
-      @data["packages"][key] = (@data["packages"][key] + new_ids).uniq.sort
+      merged = (@data["packages"][key] + new_ids).uniq
+      @data["packages"][key] = merged.last(MAX_SEEN_PER_PACKAGE)
     end
 
     def persist
       @data["updated_at"] = Time.now.utc.iso8601
       tmp = "#{@path}.tmp.#{Process.pid}"
-      File.write(tmp, JSON.pretty_generate(@data))
-      File.rename(tmp, @path)
+      File.open("#{@path}.lock", File::RDWR | File::CREAT) do |lock|
+        lock.flock(File::LOCK_EX)
+        File.write(tmp, JSON.pretty_generate(@data))
+        File.rename(tmp, @path)
+      end
     end
 
     private
