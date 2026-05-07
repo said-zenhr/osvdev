@@ -3,30 +3,53 @@ require "tmpdir"
 require "fileutils"
 require "stringio"
 
+class FakeSource
+  def initialize(results)
+    @results = results
+  end
+
+  def fetch_all
+    @results
+  end
+end
+
+class FakeNotifier
+  attr_reader :notifications, :summaries
+
+  def initialize
+    @notifications = []
+    @summaries = []
+  end
+
+  def notify(package:, vuln:)
+    @notifications << { package: package, vuln: vuln }
+  end
+
+  def post_summary(total_new)
+    @summaries << total_new
+  end
+end
+
+class FailingNotifier
+  def notify(package:, vuln:)
+    raise StackWatch::Notifiers::SlackError, "webhook failed"
+  end
+
+  def post_summary(total_new)
+    raise StackWatch::Notifiers::SlackError, "webhook failed"
+  end
+end
+
 class TestRunner < Minitest::Test
-  OSV_BATCH_URL = "https://api.osv.dev/v1/querybatch"
-  WEBHOOK_URL   = "https://hooks.slack.com/services/test"
-
-  # Raw OSV API format (not normalized)
-  RAW_VULN = {
-    "id"       => "CVE-2024-99999",
-    "summary"  => "Test vuln",
-    "severity" => [{ "type" => "CVSS_V3", "score" => "8.0" }],
-    "affected" => [
-      { "ranges" => [{ "events" => [{ "introduced" => "1.0" }, { "fixed" => "2.0" }] }] }
-    ]
-  }.freeze
-
   def setup
-    WebMock.reset!
     @tmpdir     = Dir.mktmpdir
     @state_path = File.join(@tmpdir, "state.json")
-
-    @pkg = StackWatch::Package.new(name: "django", ecosystem: "PyPI", tier: "critical")
-
-    @config = StackWatch::AppConfig.new(
+    @pkg        = StackWatch::Package.new(name: "django", ecosystem: "PyPI", tier: "critical")
+    @vuln       = stub_vuln(id: "CVE-2024-99999", summary: "Test vuln", cvss_score: "8.0",
+                            affected: ">=1.0", fixed: "2.0")
+    @config     = StackWatch::AppConfig.new(
       packages:          [@pkg],
-      slack_webhook_url: WEBHOOK_URL,
+      slack_webhook_url: nil,
       state_path:        @state_path
     )
   end
@@ -35,73 +58,86 @@ class TestRunner < Minitest::Test
     FileUtils.rm_rf(@tmpdir)
   end
 
-  def stub_osv(vulns: [RAW_VULN])
-    body = JSON.generate(results: [{ vulns: vulns }])
-    stub_request(:post, OSV_BATCH_URL)
-      .to_return(status: 200, body: body, headers: { "Content-Type" => "application/json" })
-  end
-
-  def stub_slack(status: 200)
-    stub_request(:post, WEBHOOK_URL).to_return(status: status, body: "ok")
-  end
-
-  def run_runner
-    out = StringIO.new
-    err = StringIO.new
-    count = StackWatch::Runner.call(@config, stdout: out, stderr: err)
-    [count, out.string, err.string]
-  end
-
   def test_notifies_new_vulns
-    stub_osv
-    stub_slack
-    count, out, = run_runner
+    source   = FakeSource.new({ @pkg => [@vuln] })
+    notifier = FakeNotifier.new
+
+    out   = StringIO.new
+    count = StackWatch::Runner.call(@config, stdout: out, stderr: StringIO.new,
+                                    source: source, notifier: notifier)
 
     assert_equal 1, count
-    assert_match "CVE-2024-99999", out
-    assert_requested(:post, WEBHOOK_URL, times: 2)
+    assert_match "CVE-2024-99999", out.string
+    assert_equal 1, notifier.notifications.size
+    assert_equal "CVE-2024-99999", notifier.notifications[0][:vuln].id
+    assert_equal [1], notifier.summaries
   end
 
   def test_skips_already_seen_vulns
-    # Pre-populate state with the vuln
     state = StackWatch::State.load(@state_path)
     state.mark_seen(@pkg, [stub_vuln(id: "CVE-2024-99999")])
     state.persist
 
-    stub_osv
-    stub_slack
-    count, = run_runner
+    source   = FakeSource.new({ @pkg => [@vuln] })
+    notifier = FakeNotifier.new
+
+    count = StackWatch::Runner.call(@config, stdout: StringIO.new, stderr: StringIO.new,
+                                    source: source, notifier: notifier)
 
     assert_equal 0, count
-    assert_requested(:post, WEBHOOK_URL, times: 1)
+    assert_empty notifier.notifications
+    assert_equal [0], notifier.summaries
   end
 
   def test_persists_state_on_success
-    stub_osv
-    stub_slack
-    run_runner
+    source = FakeSource.new({ @pkg => [@vuln] })
+
+    StackWatch::Runner.call(@config, stdout: StringIO.new, stderr: StringIO.new, source: source)
 
     assert File.exist?(@state_path)
     data = JSON.parse(File.read(@state_path))
     assert_includes data.dig("packages", "PyPI/django"), "CVE-2024-99999"
   end
 
-  def test_does_not_persist_on_slack_failure
-    stub_osv
-    stub_request(:post, WEBHOOK_URL).to_return(status: 500, body: "error")
+  def test_does_not_persist_on_notifier_failure
+    source   = FakeSource.new({ @pkg => [@vuln] })
+    notifier = FailingNotifier.new
 
     assert_raises(StackWatch::Notifiers::SlackError) do
-      StackWatch::Runner.call(@config, stdout: StringIO.new, stderr: StringIO.new)
+      StackWatch::Runner.call(@config, stdout: StringIO.new, stderr: StringIO.new,
+                              source: source, notifier: notifier)
     end
 
     refute File.exist?(@state_path)
   end
 
-  def test_raises_on_osv_failure
-    stub_request(:post, OSV_BATCH_URL).to_return(status: 503, body: "unavailable")
+  def test_raises_on_source_failure
+    source = FakeSource.new(nil)
+    source.define_singleton_method(:fetch_all) { raise StackWatch::Sources::OSVError, "API down" }
 
     assert_raises(StackWatch::Sources::OSVError) do
-      StackWatch::Runner.call(@config, stdout: StringIO.new, stderr: StringIO.new)
+      StackWatch::Runner.call(@config, stdout: StringIO.new, stderr: StringIO.new, source: source)
     end
+  end
+
+  def test_runs_without_notifier
+    source = FakeSource.new({ @pkg => [@vuln] })
+
+    out   = StringIO.new
+    count = StackWatch::Runner.call(@config, stdout: out, stderr: StringIO.new, source: source)
+
+    assert_equal 1, count
+    assert_match "CVE-2024-99999", out.string
+  end
+
+  def test_summary_posted_even_when_zero_new
+    source   = FakeSource.new({ @pkg => [] })
+    notifier = FakeNotifier.new
+
+    count = StackWatch::Runner.call(@config, stdout: StringIO.new, stderr: StringIO.new,
+                                    source: source, notifier: notifier)
+
+    assert_equal 0, count
+    assert_equal [0], notifier.summaries
   end
 end
