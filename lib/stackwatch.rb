@@ -1,11 +1,10 @@
-require "json"
-require "net/http"
-require "psych"
-require "set"
-require "time"
+require 'json'
+require 'net/http'
+require 'psych'
+require 'time'
 
 module StackWatch
-  VERSION = "0.1.0"
+  VERSION = '0.1.0'
 
   class ConfigError < StandardError; end
 
@@ -17,17 +16,17 @@ module StackWatch
     class SlackError < StandardError; end
   end
 
-  autoload :Config,  "stackwatch/config"
-  autoload :State,   "stackwatch/state"
+  autoload :Config,  'stackwatch/config'
+  autoload :State,   'stackwatch/state'
   autoload :Vuln,    'stackwatch/vuln'
-  autoload :Runner,  "stackwatch/runner"
-  autoload :CLI,     "stackwatch/cli"
+  autoload :Runner,  'stackwatch/runner'
+  autoload :CLI,     'stackwatch/cli'
 
   module Sources
-    autoload :OSV, "stackwatch/sources/osv"
+    autoload :OSV, 'stackwatch/sources/osv'
   end
 
   module Notifiers
-    autoload :Slack, "stackwatch/notifiers/slack"
+    autoload :Slack, 'stackwatch/notifiers/slack'
   end
 end

@@ -26,7 +26,7 @@ jobs:
           restore-keys: stackwatch-state-
 
       - name: Run StackWatch
-        run: bundle exec ruby -Ilib exe/stackwatch run --config stack.yml
+        run: bin/stackwatch run --config stack.yml
         env:
           STACKWATCH_SLACK_WEBHOOK: ${{ secrets.STACKWATCH_SLACK_WEBHOOK }}
 

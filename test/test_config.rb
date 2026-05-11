@@ -1,9 +1,9 @@
-require_relative "test_helper"
-require "tmpdir"
+require_relative 'test_helper'
+require 'tmpdir'
 
 class TestConfig < Minitest::Test
   def write_yml(content, dir: @tmpdir)
-    path = File.join(dir, "stack.yml")
+    path = File.join(dir, 'stack.yml')
     File.write(path, content)
     path
   end
@@ -34,11 +34,11 @@ class TestConfig < Minitest::Test
     cfg  = StackWatch::Config.load(path: path, env: {})
 
     assert_equal 2, cfg.packages.size
-    assert_equal "django", cfg.packages[0].name
-    assert_equal "PyPI",   cfg.packages[0].ecosystem
+    assert_equal 'django', cfg.packages[0].name
+    assert_equal 'PyPI',   cfg.packages[0].ecosystem
     assert cfg.packages[0].critical?
     refute cfg.packages[1].critical?
-    assert_equal "https://hooks.slack.com/test", cfg.slack_webhook_url
+    assert_equal 'https://hooks.slack.com/test', cfg.slack_webhook_url
   end
 
   def test_missing_packages_defaults_to_empty
@@ -49,28 +49,28 @@ class TestConfig < Minitest::Test
 
   def test_slack_webhook_from_env_overrides_yaml
     path = write_yml(VALID_YML)
-    cfg  = StackWatch::Config.load(path: path, env: { "STACKWATCH_SLACK_WEBHOOK" => "https://env-hook" })
-    assert_equal "https://env-hook", cfg.slack_webhook_url
+    cfg  = StackWatch::Config.load(path: path, env: { 'STACKWATCH_SLACK_WEBHOOK' => 'https://env-hook' })
+    assert_equal 'https://env-hook', cfg.slack_webhook_url
   end
 
   def test_state_path_precedence_flag_wins
     path = write_yml(VALID_YML)
-    cfg  = StackWatch::Config.load(path: path, state_path_override: "/flag/state.json",
-                                   env: { "STACKWATCH_STATE_PATH" => "/env/state.json" })
-    assert_equal "/flag/state.json", cfg.state_path
+    cfg  = StackWatch::Config.load(path: path, state_path_override: '/flag/state.json',
+                                   env: { 'STACKWATCH_STATE_PATH' => '/env/state.json' })
+    assert_equal '/flag/state.json', cfg.state_path
   end
 
   def test_state_path_precedence_env_over_default
     path = write_yml(VALID_YML)
-    cfg  = StackWatch::Config.load(path: path, env: { "STACKWATCH_STATE_PATH" => "/env/state.json",
-                                                       "STACKWATCH_SLACK_WEBHOOK" => "https://x" })
-    assert_equal "/env/state.json", cfg.state_path
+    cfg  = StackWatch::Config.load(path: path, env: { 'STACKWATCH_STATE_PATH' => '/env/state.json',
+                                                      'STACKWATCH_SLACK_WEBHOOK' => 'https://x' })
+    assert_equal '/env/state.json', cfg.state_path
   end
 
   def test_state_path_default
     path = write_yml(VALID_YML)
-    cfg  = StackWatch::Config.load(path: path, env: { "STACKWATCH_SLACK_WEBHOOK" => "https://x" })
-    assert_equal "state.json", cfg.state_path
+    cfg  = StackWatch::Config.load(path: path, env: { 'STACKWATCH_SLACK_WEBHOOK' => 'https://x' })
+    assert_equal 'state.json', cfg.state_path
   end
 
   def test_invalid_tier_raises
@@ -122,7 +122,7 @@ class TestConfig < Minitest::Test
       packages: []
     YAML
     err = assert_raises(StackWatch::ConfigError) { StackWatch::Config.load(path: path, env: {}) }
-    assert_match "unresolved variable", err.message
+    assert_match 'unresolved variable', err.message
   end
 
   def test_invalid_webhook_url_raises
@@ -133,12 +133,47 @@ class TestConfig < Minitest::Test
       packages: []
     YAML
     err = assert_raises(StackWatch::ConfigError) { StackWatch::Config.load(path: path, env: {}) }
-    assert_match "Invalid Slack webhook URL", err.message
+    assert_match 'Invalid Slack webhook URL', err.message
   end
 
   def test_file_not_found_raises
     assert_raises(StackWatch::ConfigError) do
-      StackWatch::Config.load(path: "/nonexistent/stack.yml", env: {})
+      StackWatch::Config.load(path: '/nonexistent/stack.yml', env: {})
     end
+  end
+
+  def test_max_age_days_defaults_to_30
+    path = write_yml(VALID_YML)
+    cfg  = StackWatch::Config.load(path: path, env: {})
+    assert_equal 30, cfg.max_age_days
+  end
+
+  def test_max_age_days_override
+    path = write_yml(<<~YAML)
+      filters:
+        max_age_days: 7
+      packages: []
+    YAML
+    cfg = StackWatch::Config.load(path: path, env: {})
+    assert_equal 7, cfg.max_age_days
+  end
+
+  def test_max_age_days_disabled_with_false
+    path = write_yml(<<~YAML)
+      filters:
+        max_age_days: false
+      packages: []
+    YAML
+    cfg = StackWatch::Config.load(path: path, env: {})
+    assert_nil cfg.max_age_days
+  end
+
+  def test_max_age_days_invalid_raises
+    path = write_yml(<<~YAML)
+      filters:
+        max_age_days: "thirty"
+      packages: []
+    YAML
+    assert_raises(StackWatch::ConfigError) { StackWatch::Config.load(path: path, env: {}) }
   end
 end

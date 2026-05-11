@@ -16,7 +16,7 @@ packages:
 Then run:
 
 ```bash
-bundle exec ruby -Ilib exe/stackwatch run --config stack.yml
+bin/stackwatch run --config stack.yml
 ```
 
 You will see CVE IDs printed to stdout, but nothing will be posted to Slack.
@@ -25,24 +25,30 @@ You will see CVE IDs printed to stdout, but nothing will be posted to Slack.
 
 ## First run vs. subsequent runs
 
-**First run** discovers the full historical backlog for every package you monitor. This can be noisy:
+By default, StackWatch only reports vulnerabilities **published in the last 30 days** (see [Filters](#filters) below). On a fresh run you will typically see a small handful, not the full historical backlog.
 
+**Second run** (and every run after) only shows CVEs disclosed *since the last run* — the `state.json` file persists seen CVE IDs.
+
+If you set `filters.max_age_days: false` to disable the age filter, the first run can be very noisy because OSV returns the full history for every package (potentially hundreds of CVEs going back a decade).
+
+---
+
+## Filters
+
+By default StackWatch hides:
+- Vulnerabilities **published more than 30 days ago** — these are usually historical noise from new packages or fresh state files.
+- Vulnerabilities marked **withdrawn** by OSV (false positives, duplicates, etc.).
+
+Tune the age window in `stack.yml`:
+
+```yaml
+filters:
+  max_age_days: 7      # only the last week
+  # max_age_days: 90   # last quarter
+  # max_age_days: false  # no age filter — report everything (noisy on first run)
 ```
-[CRITICAL] GHSA-9822-6m93-xqf4 — RubyGems/rails
-[STANDARD] GHSA-2655-q453-22f9 — PyPI/django
-...
-StackWatch: 325 new vulnerabilities found.
-```
 
-This is expected — StackWatch has never seen these CVE IDs before, so they are all "new" to it.
-
-**Second run** (and every run after) will only show CVEs that were disclosed *since the last run*:
-
-```
-StackWatch: 0 new vulnerabilities found.
-```
-
-The `state.json` file persists seen CVE IDs so you only get alerted on truly new findings.
+Vulnerabilities with no `published` date in OSV are always kept (better safe than silent). Filtered vulnerabilities are **not** written to `state.json`, so if you later widen the window they can still surface.
 
 ---
 
@@ -52,13 +58,13 @@ StackWatch has no built-in scheduler. It runs once and exits. To simulate a cron
 
 ```bash
 # Check now
-bundle exec ruby -Ilib exe/stackwatch run
+bin/stackwatch run
 
 # Check again in an hour
-bundle exec ruby -Ilib exe/stackwatch run
+bin/stackwatch run
 
 # Check with a different config
-bundle exec ruby -Ilib exe/stackwatch run --config ./my-stack.yml
+bin/stackwatch run --config ./my-stack.yml
 ```
 
 For CI/CD, invoke it on whatever schedule your platform supports (GitHub Actions `schedule`, GitLab CI `only: schedules`, etc.).
@@ -89,32 +95,32 @@ For CI/CD, invoke it on whatever schedule your platform supports (GitHub Actions
 
 ## CLI reference
 
-### `stackwatch run`
+### `bin/stackwatch run`
 
 Query CVEs for your stack and alert on new ones.
 
 ```bash
 # Use default stack.yml and state.json
-stackwatch run
+bin/stackwatch run
 
 # Use custom paths
-stackwatch run --config ./config/stack.yml --state-path ./data/state.json
+bin/stackwatch run --config ./config/stack.yml --state-path ./data/state.json
 
 # Override state path only
-stackwatch run --state-path /tmp/stackwatch-state.json
+bin/stackwatch run --state-path /tmp/stackwatch-state.json
 ```
 
 **Exit codes:**
 - `0` — success (0 or more new vulnerabilities found)
 - `1` — configuration error, OSV API error, or Slack notification failure
 
-### `stackwatch init`
+### `bin/stackwatch init`
 
 Generate a starter `stack.yml` in the current directory.
 
 ```bash
-stackwatch init
-stackwatch init --force   # overwrite existing stack.yml
+bin/stackwatch init
+bin/stackwatch init --force   # overwrite existing stack.yml
 ```
 
 ---
@@ -139,7 +145,11 @@ Either:
 
 ### First run is very noisy
 
-Expected. StackWatch discovers the full historical CVE backlog on its first run. The second run will be silent unless a new CVE is disclosed.
+By default, the 30-day age filter keeps the first run small. If you disabled it (`filters.max_age_days: false`) you will see the full historical CVE backlog on the first run. Either re-enable the filter, or let the run finish — `state.json` will absorb the IDs and the next run will be silent.
+
+### Getting CVEs from years ago (e.g. DSA-4286-1 from 2018)
+
+You probably disabled the age filter or set `max_age_days` very high. Check `filters.max_age_days` in `stack.yml`. Also: distro ecosystems like `Debian` (no version suffix) include every Debian release ever. Scope to a specific release with `ecosystem: "Debian:12"`.
 
 ### "OSV API error" or timeout
 

@@ -68,12 +68,14 @@ docker run --rm \
 
 ---
 
-### Gem (local dev)
+### Local dev
 
 ```bash
-gem install stackwatch
-stackwatch init          # generate stack.yml
-stackwatch run           # run once
+git clone https://github.com/yourorg/stackwatch.git
+cd stackwatch
+bundle install
+bin/stackwatch init      # generate stack.yml
+bin/stackwatch run       # run once
 ```
 
 ---
@@ -87,6 +89,10 @@ notifications:
   slack:
     webhook_url: "${STACKWATCH_SLACK_WEBHOOK}"   # or set env var directly
 
+filters:
+  max_age_days: 30              # ignore CVEs older than 30 days (default).
+                                # Set `false` to disable the age filter.
+
 packages:
   - name: django
     ecosystem: PyPI
@@ -99,6 +105,9 @@ packages:
 **Tiers:**
 - `critical` — posts with `@here` mention
 - `standard` — silent post, no mention
+
+**Filters:**
+- `max_age_days` — drop vulnerabilities published more than N days ago. Defaults to `30`. Set to `false` to report every historical CVE OSV has ever seen for your packages (noisy). Withdrawn vulnerabilities are always skipped.
 
 **Supported ecosystems:** any ecosystem supported by [osv.dev](https://osv.dev) — PyPI, npm, RubyGems, Go, Maven, Debian, Alpine, NuGet, Hex, crates.io, and more.
 
@@ -119,8 +128,8 @@ View on osv.dev
 ## CLI reference
 
 ```
-stackwatch run [--config stack.yml] [--state-path state.json]
-stackwatch init [--force]
+bin/stackwatch run [--config stack.yml] [--state-path state.json]
+bin/stackwatch init [--force]
 ```
 
 **Environment variables:**

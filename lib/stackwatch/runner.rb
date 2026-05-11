@@ -18,8 +18,11 @@ module StackWatch
       total_new = 0
       errors    = []
 
+      cutoff = age_cutoff
+
       results.each do |package, vulns|
-        new_vulns = @state.diff(package, vulns)
+        eligible  = vulns.reject { |v| skip?(v, cutoff) }
+        new_vulns = @state.diff(package, eligible)
         next if new_vulns.empty?
 
         new_vulns.each do |vuln|
@@ -37,10 +40,31 @@ module StackWatch
       end
 
       @state.persist
-      @notifier&.post_summary(total_new) rescue nil
-      @stdout.puts "StackWatch: #{total_new} new vulnerabilit#{total_new == 1 ? "y" : "ies"} found."
+      begin
+        @notifier&.post_summary(total_new)
+      rescue StandardError
+        nil
+      end
+      @stdout.puts "StackWatch: #{total_new} new vulnerabilit#{total_new == 1 ? 'y' : 'ies'} found."
       raise errors.first if errors.any?
+
       total_new
+    end
+
+    private
+
+    def age_cutoff
+      days = @config.max_age_days
+      return nil if days.nil?
+
+      Time.now.utc - (days * 86_400)
+    end
+
+    def skip?(vuln, cutoff)
+      return true if vuln.withdrawn?
+      return false if cutoff.nil?
+
+      vuln.older_than?(cutoff)
     end
   end
 end

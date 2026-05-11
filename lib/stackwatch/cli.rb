@@ -1,4 +1,4 @@
-require "thor"
+require 'thor'
 
 module StackWatch
   class CLI < Thor
@@ -15,6 +15,9 @@ module StackWatch
         slack:
           webhook_url: "${STACKWATCH_SLACK_WEBHOOK}"
 
+      filters:
+        max_age_days: 30   # set to false to report full historical backlog
+
       packages:
         - name: rails
           ecosystem: RubyGems
@@ -27,31 +30,31 @@ module StackWatch
           tier: standard
     YAML
 
-    desc "run", "Query CVEs for your stack and post new ones to Slack"
-    option :config,     aliases: "-c", default: "stack.yml", desc: "Path to stack.yml"
-    option :state_path, aliases: "-s", default: nil,         desc: "Override state.json path"
-    map ["run"] => :scan
+    desc 'run', 'Query CVEs for your stack and post new ones to Slack'
+    option :config,     aliases: '-c', default: 'stack.yml', desc: 'Path to stack.yml'
+    option :state_path, aliases: '-s', default: nil,         desc: 'Override state.json path'
+    map ['run'] => :scan
 
     def scan
       config = Config.load(
-        path:                options[:config],
+        path: options[:config],
         state_path_override: options[:state_path]
       )
       Runner.call(config)
     rescue ConfigError, Sources::OSVError => e
-      $stderr.puts "ERROR: #{e.message}"
+      warn "ERROR: #{e.message}"
       exit 1
     rescue Notifiers::SlackError => e
-      $stderr.puts "ERROR (Slack): #{e.message}"
+      warn "ERROR (Slack): #{e.message}"
       exit 1
     end
 
-    desc "init", "Generate a starter stack.yml in the current directory"
-    option :force, aliases: "-f", type: :boolean, default: false, desc: "Overwrite existing file"
+    desc 'init', 'Generate a starter stack.yml in the current directory'
+    option :force, aliases: '-f', type: :boolean, default: false, desc: 'Overwrite existing file'
     def init
-      target = "stack.yml"
+      target = 'stack.yml'
       if File.exist?(target) && !options[:force]
-        $stderr.puts "#{target} already exists. Use --force to overwrite."
+        warn "#{target} already exists. Use --force to overwrite."
         exit 1
       end
       File.write(target, STARTER_TEMPLATE)

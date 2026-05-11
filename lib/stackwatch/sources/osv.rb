@@ -1,7 +1,7 @@
 module StackWatch
   module Sources
     class OSV
-      BASE_URI    = URI("https://api.osv.dev/v1/querybatch")
+      BASE_URI    = URI('https://api.osv.dev/v1/querybatch')
       TIMEOUT_SEC = 15
 
       def initialize(packages)
@@ -19,9 +19,9 @@ module StackWatch
 
       def build_payload
         queries = @packages.map do |pkg|
-          { "package" => { "name" => pkg.name, "ecosystem" => pkg.ecosystem } }
+          { 'package' => { 'name' => pkg.name, 'ecosystem' => pkg.ecosystem } }
         end
-        { "queries" => queries }
+        { 'queries' => queries }
       end
 
       def post_batch(payload)
@@ -31,7 +31,7 @@ module StackWatch
         http.read_timeout = TIMEOUT_SEC
 
         req = Net::HTTP::Post.new(BASE_URI.path)
-        req["Content-Type"] = "application/json"
+        req['Content-Type'] = 'application/json'
         req.body = JSON.generate(payload)
 
         res = http.request(req)
@@ -45,13 +45,12 @@ module StackWatch
       end
 
       def parse_response(body)
-        results = body.fetch("results", [])
+        results = body.fetch('results', [])
         @packages.zip(results).each_with_object({}) do |(pkg, result), map|
-          vulns = result&.fetch("vulns", []) || []
+          vulns = result&.fetch('vulns', []) || []
           map[pkg] = vulns.map { |v| Vuln.from_osv(v) }
         end
       end
     end
-
   end
 end
